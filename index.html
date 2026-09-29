@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#13294B">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Main Street Dental — Who's playing?</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏒</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --ice: #EEF3F7;
+    --ice-line: #D5DFE8;
+    --boards: #13294B;
+    --boards-2: #1E3A66;
+    --white: #FFFFFF;
+    --ink: #1A2230;
+    --muted: #5E6B7D;
+    --in: #1F8A4C;   --in-bg: #DDF3E6;
+    --out: #C62828;  --out-bg: #FBE0E0;
+    --maybe: #A66A00; --maybe-bg: #FCEFCF;
+    --lamp: #FF3B30;
+    --display: "Barlow Condensed", "Arial Narrow", Arial, sans-serif;
+    --body: "Barlow", "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--ice); color: var(--ink); font: 16px/1.45 var(--body);
+    padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+    -webkit-tap-highlight-color: transparent;
+  }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 3px solid #5AA9FF; outline-offset: 2px; }
+
+  /* ---------- scoreboard header ---------- */
+  .board {
+    background: var(--boards); color: var(--white);
+    padding: calc(14px + env(safe-area-inset-top, 0px)) 18px 20px;
+    border-bottom: 6px solid var(--out);
+  }
+  .board-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .team { font: 800 1.35rem/1 var(--display); letter-spacing: .02em; margin: 0; }
+  .me-chip { background: var(--boards-2); border: 0; border-radius: 999px; padding: 6px 12px; font-size: .9rem; color: #C9D6EA; white-space: nowrap; }
+  .me-chip strong { color: var(--white); font-weight: 600; }
+
+  .next { margin-top: 16px; display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: center; }
+  .lamp {
+    width: 64px; height: 64px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #FFB3AE, var(--lamp) 55%, #8E0F0A);
+    box-shadow: 0 0 0 4px #0B1A33, 0 0 28px 6px rgba(255,59,48,.65);
+    display: grid; place-items: center; font-size: 1.6rem;
+  }
+  .lamp.ok { background: radial-gradient(circle at 35% 30%, #B8F5CF, #2DBE6C 55%, #0E5A30); box-shadow: 0 0 0 4px #0B1A33, 0 0 22px 4px rgba(45,190,108,.5); }
+  .lamp.off { background: #2A3F63; box-shadow: 0 0 0 4px #0B1A33; }
+  @media (prefers-reduced-motion: no-preference) {
+    .lamp:not(.ok):not(.off) { animation: pulse 1.4s ease-in-out infinite; }
+    @keyframes pulse { 50% { box-shadow: 0 0 0 4px #0B1A33, 0 0 8px 2px rgba(255,59,48,.35); } }
+  }
+  .next-when { font: 700 1.9rem/1 var(--display); margin: 0; }
+  .next-sub { color: #C9D6EA; margin: 4px 0 0; font-size: .95rem; }
+  .tally { display: flex; gap: 22px; margin-top: 16px; }
+  .tally div { font: 700 2.4rem/1 var(--display); font-variant-numeric: tabular-nums; }
+  .tally span { display: block; font: 500 .8rem/1.2 var(--body); color: #C9D6EA; margin-top: 4px; }
+  .tally .alert { color: #FF8A80; }
+
+  /* ---------- layout ---------- */
+  main { max-width: 720px; margin: 0 auto; padding: 18px 16px 24px; }
+  h2 { font: 700 1.4rem/1.1 var(--display); margin: 22px 0 10px; }
+  h2:first-child { margin-top: 0; }
+  .hint { color: var(--muted); margin: 0 0 12px; }
+
+  /* ---------- pick-your-name ---------- */
+  .names { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .names button {
+    background: var(--white); border: 2px solid var(--ice-line); border-radius: 10px;
+    padding: 14px 12px; text-align: left; font-weight: 600;
+  }
+  .names button small { display: block; font-weight: 400; color: var(--muted); }
+
+  /* ---------- my games ---------- */
+  .game { background: var(--white); border-radius: 14px; padding: 14px; margin-bottom: 12px; border: 1px solid var(--ice-line); }
+  .game-head { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+  .game-when { font: 700 1.25rem/1.1 var(--display); }
+  .game-where { color: var(--muted); font-size: .92rem; }
+  .game-count { font-size: .85rem; color: var(--muted); white-space: nowrap; }
+  .choose { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+  .choose button {
+    border: 2px solid var(--ice-line); background: var(--ice); border-radius: 12px;
+    padding: 16px 4px; font: 700 1.15rem/1 var(--display); letter-spacing: .02em;
+    transition: transform .08s;
+  }
+  .choose button:active { transform: scale(.97); }
+  .choose button.on.in    { background: var(--in);    border-color: var(--in);    color: #fff; }
+  .choose button.on.out   { background: var(--out);   border-color: var(--out);   color: #fff; }
+  .choose button.on.maybe { background: var(--maybe); border-color: var(--maybe); color: #fff; }
+
+  /* ---------- team view ---------- */
+  .game-tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 8px; }
+  .game-tabs button { flex: none; border: 2px solid var(--ice-line); background: var(--white); border-radius: 999px; padding: 6px 12px; font-weight: 600; font-size: .9rem; }
+  .game-tabs button.sel { background: var(--boards); color: #fff; border-color: var(--boards); }
+  .group { background: var(--white); border: 1px solid var(--ice-line); border-radius: 14px; overflow: hidden; margin-bottom: 14px; }
+  .group h3 { margin: 0; padding: 10px 14px; font: 700 1.05rem/1 var(--display); background: #F6F9FB; border-bottom: 1px solid var(--ice-line); display: flex; justify-content: space-between; }
+  .group h3 span { font: 500 .85rem var(--body); color: var(--muted); }
+  .group.goalies h3 { background: #FFF1EF; }
+  .row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 10px 14px; border-top: 1px solid #EDF2F6; }
+  .row:first-of-type { border-top: 0; }
+  .who { min-width: 0; }
+  .who b { font-weight: 600; }
+  .who a { color: var(--muted); font-size: .88rem; text-decoration: none; }
+  .who a:hover { text-decoration: underline; }
+  .pills { display: flex; gap: 4px; }
+  .pills button { border: 1.5px solid var(--ice-line); background: var(--white); border-radius: 8px; padding: 6px 9px; font-size: .82rem; font-weight: 600; color: var(--muted); }
+  .pills button.on.in    { background: var(--in-bg);    border-color: var(--in);    color: var(--in); }
+  .pills button.on.out   { background: var(--out-bg);   border-color: var(--out);   color: var(--out); }
+  .pills button.on.maybe { background: var(--maybe-bg); border-color: var(--maybe); color: var(--maybe); }
+  .noreply { color: var(--maybe); font-size: .8rem; }
+
+  /* ---------- manage ---------- */
+  .card { background: var(--white); border: 1px solid var(--ice-line); border-radius: 14px; padding: 14px; margin-bottom: 14px; }
+  .field { display: grid; gap: 4px; margin-bottom: 10px; }
+  .field label { font-size: .85rem; color: var(--muted); font-weight: 500; }
+  input, select { width: 100%; padding: 10px 12px; border: 1.5px solid var(--ice-line); border-radius: 10px; background: var(--white); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .edit-row { display: grid; grid-template-columns: 1.3fr 1fr; gap: 6px; padding: 10px 0; border-top: 1px solid #EDF2F6; }
+  .edit-row:first-child { border-top: 0; padding-top: 0; }
+  .edit-row .actions { grid-column: 1 / -1; display: flex; gap: 6px; justify-content: flex-end; }
+  .btn { border: 0; border-radius: 10px; padding: 10px 14px; font-weight: 600; background: var(--boards); color: #fff; }
+  .btn.ghost { background: var(--ice); color: var(--ink); }
+  .btn.danger { background: var(--out-bg); color: var(--out); }
+
+  /* ---------- nav + toast ---------- */
+  nav {
+    position: fixed; left: 0; right: 0; bottom: 0; background: var(--white);
+    border-top: 1px solid var(--ice-line); display: grid; grid-template-columns: repeat(3, 1fr);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  nav button { border: 0; background: none; padding: 12px 4px 14px; font-weight: 600; color: var(--muted); font-size: .92rem; }
+  nav button.sel { color: var(--boards); box-shadow: inset 0 3px 0 var(--out); }
+  .toast { position: fixed; left: 50%; bottom: calc(86px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--boards); color: #fff; padding: 10px 16px; border-radius: 10px; font-weight: 500; opacity: 0; pointer-events: none; transition: opacity .2s; }
+  .toast.show { opacity: 1; }
+  .empty { background: var(--white); border: 2px dashed var(--ice-line); border-radius: 14px; padding: 22px; text-align: center; color: var(--muted); }
+  .setup { background: #FFF6D8; border: 1px solid #E8D48A; border-radius: 12px; padding: 14px; }
+  .setup code { background: #fff; padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<header class="board">
+  <div class="board-top">
+    <h1 class="team" id="teamName">Main Street Dental</h1>
+    <button class="me-chip" id="meChip" hidden></button>
+  </div>
+  <div id="nextGame"></div>
+</header>
+
+<main id="view"></main>
+
+<nav>
+  <button data-tab="me" class="sel">My games</button>
+  <button data-tab="team">Team</button>
+  <button data-tab="manage">Manage</button>
+</nav>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ===== 1. Paste your Supabase project details here (Project Settings → API) ===== */
+const SUPABASE_URL = "https://YOUR-PROJECT.supabase.co";
+const SUPABASE_KEY = "YOUR-ANON-OR-PUBLISHABLE-KEY";
+/* ================================================================================ */
+
+const configured = !SUPABASE_URL.includes("YOUR-PROJECT");
+const sb = configured ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+
+const S = { settings: { team_name: "Main Street Dental", skaters_needed: 10 }, players: [], games: [], rsvps: {}, tab: "me", teamGame: null };
+const ROLE_LABEL = { goalie: "Starting goalie", backup_goalie: "Backup goalie", regular: "Regular", sub: "Sub" };
+const ROLE_ORDER = { goalie: 0, backup_goalie: 1, regular: 2, sub: 3 };
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const key = (g, p) => g + "_" + p;
+
+function meId() { try { return localStorage.getItem("msd_me"); } catch { return null; } }
+function setMe(id) { try { id ? localStorage.setItem("msd_me", id) : localStorage.removeItem("msd_me"); } catch {} }
+
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), 1600); }
+
+function fmtWhen(iso, long) {
+  const d = new Date(iso);
+  const day = d.toLocaleDateString("en-CA", { weekday: long ? "long" : "short", month: "short", day: "numeric" });
+  const time = d.toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit" });
+  return day + ", " + time;
+}
+function upcoming() {
+  const cutoff = Date.now() - 3 * 3600 * 1000; // games stay visible until 3 h after start
+  return S.games.filter(g => new Date(g.starts_at).getTime() >= cutoff);
+}
+function sortedPlayers() {
+  return [...S.players].sort((a, b) => (ROLE_ORDER[a.role] - ROLE_ORDER[b.role]) || a.name.localeCompare(b.name));
+}
+function summary(gameId) {
+  let goalie = false, skaters = 0, maybe = 0, noReply = 0;
+  for (const p of S.players) {
+    const st = S.rsvps[key(gameId, p.id)];
+    const isG = p.role === "goalie" || p.role === "backup_goalie";
+    if (st === "in") isG ? goalie = true : skaters++;
+    if (st === "maybe" && !isG) maybe++;
+    if (!st && p.role === "regular") noReply++;
+  }
+  const need = Math.max(0, (S.settings.skaters_needed || 0) - skaters);
+  return { goalie, skaters, maybe, noReply, need };
+}
+
+/* ---------------- data ---------------- */
+async function loadAll() {
+  if (!sb) return render();
+  const [st, pl, gm, rv] = await Promise.all([
+    sb.from("settings").select("*").eq("id", 1).maybeSingle(),
+    sb.from("players").select("*"),
+    sb.from("games").select("*").order("starts_at"),
+    sb.from("rsvps").select("*"),
+  ]);
+  const err = st.error || pl.error || gm.error || rv.error;
+  if (err) { toast("Couldn't load: " + err.message); return; }
+  if (st.data) S.settings = st.data;
+  S.players = pl.data; S.games = gm.data;
+  S.rsvps = {}; for (const r of rv.data) S.rsvps[key(r.game_id, r.player_id)] = r.status;
+  if (meId() && !S.players.some(p => p.id === meId())) setMe(null);
+  render();
+}
+let reloadT;
+function liveUpdates() {
+  if (!sb) return;
+  sb.channel("all").on("postgres_changes", { event: "*", schema: "public" }, () => {
+    clearTimeout(reloadT); reloadT = setTimeout(loadAll, 250);
+  }).subscribe();
+}
+
+async function setStatus(gameId, playerId, status) {
+  const k = key(gameId, playerId), prev = S.rsvps[k];
+  const next = prev === status ? null : status; // tap again to clear
+  next ? S.rsvps[k] = next : delete S.rsvps[k];
+  render();
+  const { error } = next
+    ? await sb.from("rsvps").upsert({ game_id: gameId, player_id: playerId, status: next, updated_at: new Date().toISOString() })
+    : await sb.from("rsvps").delete().match({ game_id: gameId, player_id: playerId });
+  if (error) { prev ? S.rsvps[k] = prev : delete S.rsvps[k]; render(); toast("Not saved: " + error.message); }
+  else toast(next ? "Saved: " + next.toUpperCase() : "Cleared");
+}
+
+/* ---------------- render ---------------- */
+function renderBoard() {
+  $("#teamName").textContent = S.settings.team_name || "Main Street Dental";
+  document.title = (S.settings.team_name || "Team") + " — Who's playing?";
+  const me = S.players.find(p => p.id === meId());
+  const chip = $("#meChip");
+  chip.hidden = !me;
+  if (me) chip.innerHTML = "<strong>" + esc(me.name) + "</strong> · not you?";
+
+  const g = upcoming()[0], box = $("#nextGame");
+  if (!g) { box.innerHTML = '<div class="next"><div class="lamp off"></div><div><p class="next-when">No games yet</p><p class="next-sub">Add the schedule in Manage.</p></div></div>'; return; }
+  const s = summary(g.id);
+  const lampClass = s.goalie ? "ok" : "";
+  box.innerHTML = `
+    <div class="next">
+      <div class="lamp ${lampClass}" role="img" aria-label="${s.goalie ? "Goalie confirmed" : "No goalie yet"}">${s.goalie ? "🥅" : "!"}</div>
+      <div>
+        <p class="next-when">${esc(fmtWhen(g.starts_at, true))}</p>
+        <p class="next-sub">${esc([g.opponent && "vs " + g.opponent, g.location].filter(Boolean).join(" at ")) || "Next game"}</p>
+      </div>
+    </div>
+    <div class="tally">
+      <div class="${s.goalie ? "" : "alert"}">${s.goalie ? "Yes" : "No"}<span>Goalie in net</span></div>
+      <div>${s.skaters}/${S.settings.skaters_needed}<span>Skaters in</span></div>
+      <div class="${s.need ? "alert" : ""}">${s.need}<span>Subs needed</span></div>
+    </div>`;
+}
+
+function renderMe() {
+  const me = S.players.find(p => p.id === meId());
+  if (!me) {
+    if (!S.players.length) return '<div class="empty">No players yet. Add the roster in <b>Manage</b>.</div>';
+    return `<h2>Who are you?</h2><p class="hint">Tap your name once. This phone will remember you.</p>
+      <div class="names">${sortedPlayers().map(p => `<button data-me="${p.id}">${esc(p.name)}<small>${ROLE_LABEL[p.role]}</small></button>`).join("")}</div>`;
+  }
+  const games = upcoming();
+  if (!games.length) return '<div class="empty">No upcoming games. Add them in <b>Manage</b>.</div>';
+  return `<h2>Are you playing?</h2>` + games.map(g => {
+    const st = S.rsvps[key(g.id, me.id)], s = summary(g.id);
+    return `<div class="game">
+      <div class="game-head">
+        <div><div class="game-when">${esc(fmtWhen(g.starts_at))}</div>
+        <div class="game-where">${esc([g.opponent && "vs " + g.opponent, g.location].filter(Boolean).join(" · "))}</div></div>
+        <div class="game-count">${s.goalie ? "🥅" : "🚨 no goalie"} · ${s.skaters}/${S.settings.skaters_needed}</div>
+      </div>
+      <div class="choose">
+        ${["in", "maybe", "out"].map(v => `<button class="${v} ${st === v ? "on" : ""}" data-set="${g.id}|${me.id}|${v}" aria-pressed="${st === v}">${v === "in" ? "I'm in" : v === "out" ? "I'm out" : "Maybe"}</button>`).join("")}
+      </div></div>`;
+  }).join("");
+}
+
+function renderTeam() {
+  const games = upcoming();
+  if (!games.length) return '<div class="empty">No upcoming games. Add them in <b>Manage</b>.</div>';
+  if (!games.some(g => g.id === S.teamGame)) S.teamGame = games[0].id;
+  const gid = S.teamGame, s = summary(gid);
+  const groups = [
+    ["Goalies", "goalies", p => p.role === "goalie" || p.role === "backup_goalie", s.goalie ? "✅ in net" : "🚨 none yet"],
+    ["Regulars", "", p => p.role === "regular", s.noReply ? s.noReply + " haven't answered" : ""],
+    ["Subs", "", p => p.role === "sub", s.need ? "need " + s.need : "not needed"],
+  ];
+  const tabs = `<div class="game-tabs">${games.map(g => `<button class="${g.id === gid ? "sel" : ""}" data-teamgame="${g.id}">${esc(new Date(g.starts_at).toLocaleDateString("en-CA", { weekday: "short", month: "short", day: "numeric" }))}</button>`).join("")}</div>`;
+  const body = groups.map(([title, cls, fn, note]) => {
+    const list = sortedPlayers().filter(fn);
+    return `<section class="group ${cls}"><h3>${title}<span>${esc(note)}</span></h3>
+      ${list.length ? list.map(p => {
+        const st = S.rsvps[key(gid, p.id)];
+        const tel = (p.phone || "").replace(/[^\d+]/g, "");
+        return `<div class="row"><div class="who"><b>${esc(p.name)}</b>${p.role === "backup_goalie" ? ' <small class="game-where">backup</small>' : ""}<br>
+          ${tel ? `<a href="tel:${tel}">${esc(p.phone)}</a> · <a href="sms:${tel}">text</a>` : '<span class="game-where">no phone</span>'}
+          ${!st && p.role === "regular" ? ' <span class="noreply">· no answer</span>' : ""}</div>
+          <div class="pills">${["in", "maybe", "out"].map(v => `<button class="${v} ${st === v ? "on" : ""}" data-set="${gid}|${p.id}|${v}" aria-pressed="${st === v}">${v === "maybe" ? "?" : v[0].toUpperCase() + v.slice(1)}</button>`).join("")}</div></div>`;
+      }).join("") : '<div class="row"><span class="hint" style="margin:0">Nobody here yet.</span></div>'}
+    </section>`;
+  }).join("");
+  return `<h2>${esc(fmtWhen(games.find(g => g.id === gid).starts_at, true))}</h2><p class="hint">Anyone can set anyone's status.</p>` + tabs + body;
+}
+
+function toLocalInput(iso) {
+  const d = new Date(iso), p = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function roleSelect(val) {
+  return `<select name="role">${Object.entries(ROLE_LABEL).map(([k, v]) => `<option value="${k}" ${k === val ? "selected" : ""}>${v}</option>`).join("")}</select>`;
+}
+function renderManage() {
+  const players = sortedPlayers();
+  return `
+  <h2>Team</h2>
+  <form class="card" data-form="settings">
+    <div class="grid2">
+      <div class="field"><label for="tn">Team name</label><input id="tn" name="team_name" value="${esc(S.settings.team_name)}"></div>
+      <div class="field"><label for="sn">Skaters needed (not incl. goalie)</label><input id="sn" name="skaters_needed" type="number" min="1" max="30" value="${esc(S.settings.skaters_needed)}"></div>
+    </div>
+    <button class="btn">Save team</button>
+  </form>
+
+  <h2>Players</h2>
+  <div class="card">
+    ${players.map(p => `<form class="edit-row" data-form="player" data-id="${p.id}">
+      <input name="name" value="${esc(p.name)}" aria-label="Name" required>
+      <input name="phone" value="${esc(p.phone)}" aria-label="Phone" type="tel" placeholder="Phone">
+      ${roleSelect(p.role)}
+      <input name="position" value="${esc(p.position)}" aria-label="Position" placeholder="Position">
+      <div class="actions"><button type="button" class="btn danger" data-del-player="${p.id}">Remove</button><button class="btn">Save</button></div>
+    </form>`).join("") || '<p class="hint">No players yet.</p>'}
+  </div>
+  <form class="card" data-form="newplayer">
+    <div class="grid2">
+      <div class="field"><label>Name</label><input name="name" required></div>
+      <div class="field"><label>Phone</label><input name="phone" type="tel"></div>
+      <div class="field"><label>Role</label>${roleSelect("regular")}</div>
+      <div class="field"><label>Position</label><input name="position" placeholder="Forward, Defence…"></div>
+    </div>
+    <button class="btn">Add player</button>
+  </form>
+
+  <h2>Schedule</h2>
+  <div class="card">
+    ${S.games.map(g => `<form class="edit-row" data-form="game" data-id="${g.id}">
+      <input name="starts_at" type="datetime-local" value="${toLocalInput(g.starts_at)}" aria-label="Date and time" required>
+      <input name="opponent" value="${esc(g.opponent)}" placeholder="Opponent" aria-label="Opponent">
+      <input name="location" value="${esc(g.location)}" placeholder="Rink" aria-label="Rink" style="grid-column:1/-1">
+      <div class="actions"><button type="button" class="btn danger" data-del-game="${g.id}">Remove</button><button class="btn">Save</button></div>
+    </form>`).join("") || '<p class="hint">No games yet.</p>'}
+  </div>
+  <form class="card" data-form="newgame">
+    <div class="grid2">
+      <div class="field"><label>Date and time</label><input name="starts_at" type="datetime-local" required></div>
+      <div class="field"><label>Opponent</label><input name="opponent"></div>
+    </div>
+    <div class="field"><label>Rink</label><input name="location"></div>
+    <button class="btn">Add game</button>
+  </form>`;
+}
+
+function render() {
+  renderBoard();
+  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("sel", b.dataset.tab === S.tab));
+  if (!configured) {
+    $("#view").innerHTML = '<div class="setup"><b>Almost there.</b> Open <code>index.html</code> and paste your Supabase URL and anon key at the top of the script.</div>';
+    return;
+  }
+  // don't wipe a form someone is typing in when a live update arrives
+  const active = document.activeElement;
+  if (S.tab === "manage" && active && active.closest && active.closest("form") && render.fromLive) return;
+  $("#view").innerHTML = S.tab === "me" ? renderMe() : S.tab === "team" ? renderTeam() : renderManage();
+}
+
+/* ---------------- events ---------------- */
+document.addEventListener("click", e => {
+  const t = e.target.closest("button");
+  if (!t) return;
+  if (t.dataset.tab) { S.tab = t.dataset.tab; render(); window.scrollTo(0, 0); return; }
+  if (t.id === "meChip") { setMe(null); S.tab = "me"; render(); return; }
+  if (t.dataset.me) { setMe(t.dataset.me); render(); return; }
+  if (t.dataset.teamgame) { S.teamGame = t.dataset.teamgame; render(); return; }
+  if (t.dataset.set) { const [g, p, v] = t.dataset.set.split("|"); setStatus(g, p, v); return; }
+  if (t.dataset.delPlayer) {
+    const p = S.players.find(x => x.id === t.dataset.delPlayer);
+    if (confirm("Remove " + (p ? p.name : "this player") + "?")) sb.from("players").delete().eq("id", t.dataset.delPlayer).then(r => { r.error ? toast(r.error.message) : (toast("Player removed"), loadAll()); });
+    return;
+  }
+  if (t.dataset.delGame) {
+    if (confirm("Remove this game and everyone's answers for it?")) sb.from("games").delete().eq("id", t.dataset.delGame).then(r => { r.error ? toast(r.error.message) : (toast("Game removed"), loadAll()); });
+  }
+});
+
+document.addEventListener("submit", async e => {
+  const f = e.target.closest("form[data-form]");
+  if (!f) return;
+  e.preventDefault();
+  const d = Object.fromEntries(new FormData(f));
+  const clean = o => { for (const k in o) if (typeof o[k] === "string") o[k] = o[k].trim() || null; return o; };
+  let res, msg;
+  switch (f.dataset.form) {
+    case "settings":
+      res = await sb.from("settings").update({ team_name: d.team_name.trim() || "Main Street Dental", skaters_needed: parseInt(d.skaters_needed, 10) || 10 }).eq("id", 1); msg = "Team saved"; break;
+    case "player":
+      res = await sb.from("players").update(clean(d)).eq("id", f.dataset.id); msg = "Player saved"; break;
+    case "newplayer":
+      res = await sb.from("players").insert(clean(d)); msg = "Player added"; break;
+    case "game":
+    case "newgame":
+      d.starts_at = new Date(d.starts_at).toISOString();
+      res = f.dataset.form === "game"
+        ? await sb.from("games").update(clean(d)).eq("id", f.dataset.id)
+        : await sb.from("games").insert(clean(d));
+      msg = f.dataset.form === "game" ? "Game saved" : "Game added"; break;
+  }
+  if (res.error) return toast("Not saved: " + res.error.message);
+  toast(msg);
+  document.activeElement && document.activeElement.blur();
+  await loadAll();
+});
+
+// live updates: re-render, but skip if someone is mid-typing in Manage
+const _loadAll = loadAll;
+loadAll = async function () { render.fromLive = true; try { await _loadAll(); } finally { render.fromLive = false; } };
+
+loadAll();
+liveUpdates();
+</script>
+</body>
+</html>
